@@ -1,79 +1,96 @@
 #include "arduinoFFT.h"
 
 #define PIN_INPUT A1
-#define SAMPLES 128             
-#define SAMPLING_FREQUENCY 10000 
+#define SAMPLES 256                // meilleure résolution
+#define SAMPLING_FREQUENCY 9878.0  // fréquence réelle mesurée
 
 double vReal[SAMPLES];
 double vImag[SAMPLES];
-unsigned int sampling_period_us;
 
-// Création de l'objet FFT
 ArduinoFFT<double> FFT = ArduinoFFT<double>(vReal, vImag, SAMPLES, SAMPLING_FREQUENCY);
 
 void setup() {
   Serial.begin(115200);
-  
-  // Attente USB pour l'ESP32-S2
-  while (!Serial && millis() < 5000); 
-  
-  sampling_period_us = round(1000000 * (1.0 / SAMPLING_FREQUENCY));
+  while (!Serial && millis() < 5000)
+    ;
+
   pinMode(PIN_INPUT, INPUT);
-  
-  Serial.println("Initialisation terminée - Mode Hertz");
+  Serial.println("Initialisation terminée - Mode Hertz corrigé");
 }
 
 void loop() {
-  unsigned long start = micros();
 
-  // 1. Capture des échantillons (équivalent de ton ancienne fonction extraction)
+  // ==============================
+  // 1. Acquisition
+  // ==============================
+
+  unsigned long sampling_period_us = round(1000000.0 / SAMPLING_FREQUENCY);
+
   for (int i = 0; i < SAMPLES; i++) {
     unsigned long microseconds = micros();
-    
-    // Lecture directe (0-4095)
+
     vReal[i] = analogRead(PIN_INPUT);
     vImag[i] = 0;
-    
-    // On force une cadence de 10kHz
-    while (micros() < (microseconds + sampling_period_us));
+
+    while (micros() - microseconds < sampling_period_us)
+      ;
   }
 
-  unsigned long duration = micros() - start;
+  // ==============================
+  // 2. Suppression composante DC
+  // ==============================
 
-  Serial.print("Temps total us: ");
-  Serial.println(duration);
+  double mean = 0;
+  for (int i = 0; i < SAMPLES; i++) {
+    mean += vReal[i];
+  }
+  mean /= SAMPLES;
 
-  Serial.print("Frequence echantillonnage reelle: ");
-  Serial.println((SAMPLES * 1000000.0) / duration);
+  for (int i = 0; i < SAMPLES; i++) {
+    vReal[i] -= mean;
+  }
 
-  // 2. Calculs mathématiques (FFT)
+  // ==============================
+  // 3. FFT
+  // ==============================
+
   FFT.windowing(FFT_WIN_TYP_HAMMING, FFT_FORWARD);
   FFT.compute(FFT_FORWARD);
   FFT.complexToMagnitude();
 
-  // 3. Trouver la fréquence dominante (Le pic en Hz)
-  double peak = FFT.majorPeak();
+  // ==============================
+  // 4. Recherche du vrai pic
+  // ==============================
 
-  // 4. Affichage simple pour le Traceur Série
-  // On affiche le pic pour voir la valeur en continu
+  double maxMagnitude = 0;
+  int maxIndex = 0;
+
+  // Ignorer les 3 premiers bins (~ < 100 Hz)
+  for (int i = 3; i < SAMPLES / 2; i++) {
+    if (vReal[i] > maxMagnitude) {
+      maxMagnitude = vReal[i];
+      maxIndex = i;
+    }
+  }
+
+  double frequency = (maxIndex * SAMPLING_FREQUENCY) / SAMPLES;
+
+  // ==============================
+  // 5. Affichage
+  // ==============================
+
   Serial.print("Frequence_Hz:");
-  Serial.println(peak);
+  Serial.println(frequency);
 
-  // 5. On affiche le max / min pour borner l'affichage
-  Serial.print("Min:20");
-  Serial.print(" ");
-  // on ce consentre entre 20htz et 5000htz pour représenter le rythme de la musique
-  Serial.print("Max:5000");
-  Serial.print(" ");
+  Serial.print("Min:20 ");
+  Serial.print("Max:5000 ");
+  Serial.println();
 
-
-  // Optionnel : ralentir un peu pour la lisibilité sur l'écran
   delay(50);
 }
 
 
-
 // 50 -> 300
-// 500 -> 350 
+// 500 -> 350
 // 1000 -> 355
 // 5000 -> 360

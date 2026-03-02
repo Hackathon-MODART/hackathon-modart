@@ -24,6 +24,8 @@ void setup() {
 }
 
 void loop() {
+  unsigned long start = micros();
+
   // 1. Capture des échantillons (équivalent de ton ancienne fonction extraction)
   for (int i = 0; i < SAMPLES; i++) {
     unsigned long microseconds = micros();
@@ -35,6 +37,14 @@ void loop() {
     // On force une cadence de 10kHz
     while (micros() < (microseconds + sampling_period_us));
   }
+
+  unsigned long duration = micros() - start;
+
+  Serial.print("Temps total us: ");
+  Serial.println(duration);
+
+  Serial.print("Frequence echantillonnage reelle: ");
+  Serial.println((SAMPLES * 1000000.0) / duration);
 
   // 2. Calculs mathématiques (FFT)
   FFT.windowing(FFT_WIN_TYP_HAMMING, FFT_FORWARD);
@@ -49,6 +59,21 @@ void loop() {
   Serial.print("Frequence_Hz:");
   Serial.println(peak);
 
+  // 5. On affiche le max / min pour borner l'affichage
+  Serial.print("Min:20");
+  Serial.print(" ");
+  // on ce consentre entre 20htz et 5000htz pour représenter le rythme de la musique
+  Serial.print("Max:5000");
+  Serial.print(" ");
+
+
   // Optionnel : ralentir un peu pour la lisibilité sur l'écran
   delay(50);
 }
+
+
+
+// 50 -> 300
+// 500 -> 350 
+// 1000 -> 355
+// 5000 -> 360

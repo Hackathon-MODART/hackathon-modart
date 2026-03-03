@@ -113,6 +113,16 @@ void displayMatrixFrame(const uint32_t matrix[WIDTH][HEIGHT]) {
   }
 }
 
+// Play any animation table: frames[frameCount][WIDTH][HEIGHT] in PROGMEM
+void playAnimation(const uint32_t (*frames)[WIDTH][HEIGHT], uint16_t frameCount, uint16_t frameDelayMs) {
+  for (uint16_t f = 0; f < frameCount; f++) {
+    FastLED.clear();
+    displayMatrixFrame(frames[f]);
+    FastLED.show();
+    delay(frameDelayMs);
+  }
+}
+
 void setup() {
   delay(1000);
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS);
@@ -122,14 +132,8 @@ void setup() {
 }
 
 void loop() {
-  
+  playAnimation(logo_anim, FRAME_COUNT_LOGO_ANIM, 200);
 
-  for (uint16_t frame = 0; frame < FRAME_COUNT_LOGO_ANIM; frame++) {
-    FastLED.clear();
-    displayMatrixFrame(logo_anim[frame]);
-    FastLED.show();
-    delay(200);
-  }
-  
-  delay(200);
+  playAnimation(plasma_flow, FRAME_COUNT_PLASMA_FLOW, 200);
+
 }

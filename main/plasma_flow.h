@@ -3,7 +3,6 @@
 #define PLASMA_FLOW_H
 
 #include <stdint.h>
-#include <avr/pgmspace.h> // For PROGMEM on generic boards if needed
 
 const uint16_t FRAME_COUNT_PLASMA_FLOW = 30;
 const uint8_t MATRIX_WIDTH_PLASMA_FLOW = 32;

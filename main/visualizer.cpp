@@ -87,8 +87,10 @@ void runVisualizer() {
   static unsigned long lastDebug = 0;
   if (millis() - lastDebug > 1000) {
     lastDebug = millis();
-    Serial.printf("[VIZ] Raw ADC: %d %d %d %d | ",
-                  (int)vReal[0], (int)vReal[1], (int)vReal[2], (int)vReal[3]);
+    //Serial.printf(
+    //  "[VIZ] Raw ADC: %d %d %d %d | ",
+    //   (int)vReal[0], (int)vReal[1], (int)vReal[2], (int)vReal[3]
+    //);
 
     // ── also show the max magnitude after FFT for tuning ──
   }

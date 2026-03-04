@@ -4,6 +4,7 @@
 #include "plasma_v2.h"
 #include "logo_anim_v2.h"
 #include "logo_anim_v3.h"
+#include "logo_anim_v4.h"
 
 #define LED_PIN     13
 #define WIDTH       32
@@ -83,7 +84,7 @@ void setup() {
 }
 
 void loop() {
-  playAnimation(logo_anim_v3, FRAME_COUNT_LOGO_ANIM_V3, 150);
+  playAnimation(logo_anim_v4, FRAME_COUNT_LOGO_ANIM_V4, 150);
 
   //playAnimation(plasma_v2, FRAME_COUNT_PLASMA_FLOW, 150);
 

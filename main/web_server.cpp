@@ -46,12 +46,14 @@ static void handleAnimationPost() {
   const String& body = server.arg("plain");
 
   int fc = parseJsonInt(body, "frameCount");
-  int delayMs = parseJsonInt(body, "delay");
-  if (fc <= 0 || delayMs <= 0) {
+  int fps = parseJsonInt(body, "fps");
+  if (fc <= 0 || fps <= 0) {
     server.send(400, "application/json",
                 "{\"error\":\"invalid frameCount or delay\"}");
     return;
   }
+
+  int delayMs = 1000 / fps;
 
   int dataPos = body.indexOf("\"data\"");
   if (dataPos < 0) {

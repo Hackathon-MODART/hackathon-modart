@@ -121,7 +121,6 @@ static void handleAnimationPost() {
   Serial.printf("JSON upload: %d frames, %d ms\n", fc, delayMs);
 
   if (loadLfsHeader()) {
-    resetVisualizer();
     animSource = ANIM_LITTLEFS;
     currentFrame = 0;
 
@@ -204,7 +203,6 @@ static void handleBuiltin() {
     return;
   }
 
-  resetVisualizer();
   builtinIndex = static_cast<uint8_t>(idx);
   animSource = ANIM_BUILTIN;
   currentFrame = 0;
@@ -220,7 +218,6 @@ static void handleBuiltin() {
 static void handleDeleteAnimation() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
 
-  resetVisualizer();
   LittleFS.remove(ANIM_FILE);
   lfsFrameCount = 0;
   animSource = ANIM_BUILTIN;
@@ -297,7 +294,6 @@ static void handleStaticPost() {
     }
   }
 
-  resetVisualizer();
   animSource = ANIM_STATIC;
   FastLED.show();
 

@@ -14,13 +14,14 @@ static const float SMOOTH_FACTOR = 0.70f;
 // ── Haptic / beat detection tunables ────────────────────────────────
 // Bass bins: at 9878 Hz / 256 samples ≈ 38.6 Hz per bin.
 // Bins 2-6 cover ~77-231 Hz (kick drum / bass range).
-static const uint16_t BASS_BIN_START      = 2;
-static const uint16_t BASS_BIN_END        = 7;
-static const float    BASS_NOISE_FLOOR    = 2000.0f;
-static const float    BASS_BEAT_THRESHOLD = 6000.0f;  // raw magnitude above which we consider it a beat
-static const unsigned long PULSE_ON_MS    = 90;       // vibration ON duration per beat
-static const unsigned long PULSE_COOLDOWN_MS = 120;   // minimum gap between two pulses
-static const uint8_t  VIBRATOR_PWM_ON     = 255;
+static const uint16_t BASS_BIN_START   = 2;
+static const uint16_t BASS_BIN_END     = 7;
+static const float    BASS_NOISE_FLOOR = 2000.0f;
+static const float    BASS_SENSITIVITY = 18000.0f;
+static const float    BEAT_ATTACK      = 0.90f;   // fast rise
+static const float    BEAT_DECAY       = 0.60f;   // slower fall — gives a pulse feel
+static const uint8_t  VIBRATOR_MIN_PWM = 0;
+static const uint8_t  VIBRATOR_MAX_PWM = 255;
 
 // ── FFT buffers ─────────────────────────────────────────────────────
 
@@ -41,8 +42,7 @@ static bool visualizerStarted = false;
 
 // ── Haptic state ────────────────────────────────────────────────────
 
-static unsigned long pulseStartMs  = 0;
-static bool          pulseActive   = false;
+static float bassEnvelope = 0.0f;
 
 // ── Initialisation ──────────────────────────────────────────────────
 
@@ -159,7 +159,7 @@ void runVisualizer() {
     if (colHeight[col] < 0.4f) colHeight[col] = 0;
   }
 
-  // ── 5. Haptic beat pulse (bass peak → short vibration burst) ────
+  // ── 5. Haptic beat detection (bass energy → vibrator PWM) ──────
 
   {
     double bassPeak = 0;
@@ -167,19 +167,21 @@ void runVisualizer() {
       if (vReal[bin] > bassPeak) bassPeak = vReal[bin];
     }
 
-    unsigned long now = millis();
-
-    if (!pulseActive && bassPeak > BASS_BEAT_THRESHOLD
-        && (now - pulseStartMs) > (PULSE_ON_MS + PULSE_COOLDOWN_MS)) {
-      pulseActive  = true;
-      pulseStartMs = now;
-      ledcWrite(VIBRATOR_PIN, VIBRATOR_PWM_ON);
+    float bassLevel = 0.0f;
+    if (bassPeak > BASS_NOISE_FLOOR) {
+      bassLevel = constrain((float)(bassPeak - BASS_NOISE_FLOOR) / BASS_SENSITIVITY, 0.0f, 1.0f);
     }
 
-    if (pulseActive && (now - pulseStartMs) >= PULSE_ON_MS) {
-      pulseActive = false;
-      ledcWrite(VIBRATOR_PIN, 0);
+    if (bassLevel > bassEnvelope) {
+      bassEnvelope = bassEnvelope * (1.0f - BEAT_ATTACK) + bassLevel * BEAT_ATTACK;
+    } else {
+      bassEnvelope = bassEnvelope * BEAT_DECAY;
     }
+
+    if (bassEnvelope < 0.02f) bassEnvelope = 0.0f;
+
+    uint8_t pwm = (uint8_t)(VIBRATOR_MIN_PWM + bassEnvelope * (VIBRATOR_MAX_PWM - VIBRATOR_MIN_PWM));
+    ledcWrite(VIBRATOR_PIN, pwm);
   }
 
   // ── 6. Render ──────────────────────────────────────────────────
@@ -201,7 +203,6 @@ void runVisualizer() {
 void resetVisualizer() {
   visualizerStarted = false;
   for (int col = 0; col < WIDTH; col++) colHeight[col] = 0;
-  pulseActive = false;
-  pulseStartMs = 0;
+  bassEnvelope = 0.0f;
   ledcWrite(VIBRATOR_PIN, 0);
 }

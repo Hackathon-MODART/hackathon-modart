@@ -4,10 +4,16 @@
 
 #include "web_server.h"
 #include "visualizer.h"
+#include "pong.h"
 
 // ── Globals ─────────────────────────────────────────────────────────
 
 WebServer server(80);
+WebSocketsServer wsServer(81);
+
+// Map WebSocket client number -> assigned player (1 or 2), 0 = unassigned
+static uint8_t wsPlayerSlot[4] = {0, 0, 0, 0};
+#define WS_MAX_CLIENTS 4
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -27,6 +33,100 @@ static int parseJsonInt(const String& json, const char* key) {
   pos = json.indexOf(':', pos);
   if (pos < 0) return -1;
   return json.substring(pos + 1).toInt();
+}
+
+// ── WebSocket helpers ───────────────────────────────────────────────
+
+static const char* parseJsonString(const String& json, const char* key, char* buf, size_t bufLen) {
+  String needle = "\"";
+  needle += key;
+  needle += "\"";
+  int pos = json.indexOf(needle);
+  if (pos < 0) return nullptr;
+  pos = json.indexOf('"', json.indexOf(':', pos) + 1);
+  if (pos < 0) return nullptr;
+  pos++;
+  int end = json.indexOf('"', pos);
+  if (end < 0) return nullptr;
+  size_t len = static_cast<size_t>(end - pos);
+  if (len >= bufLen) len = bufLen - 1;
+  json.substring(pos, pos + len).toCharArray(buf, bufLen);
+  return buf;
+}
+
+void broadcastPongState() {
+  String msg = "{\"type\":\"state\",\"status\":\"";
+  switch (pong.status) {
+    case PONG_WAITING:  msg += "waiting";  break;
+    case PONG_PLAYING:  msg += "playing";  break;
+    case PONG_SCORED:   msg += "scored";   break;
+    case PONG_GAMEOVER: msg += "gameover"; break;
+  }
+  msg += "\",\"score\":[";
+  msg += pong.score1;
+  msg += ",";
+  msg += pong.score2;
+  msg += "],\"winner\":";
+  msg += pong.winner;
+  msg += "}";
+  wsServer.broadcastTXT(msg);
+}
+
+static void onWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
+  switch (type) {
+    case WStype_CONNECTED: {
+      Serial.printf("[WS] Client %u connected\n", num);
+      if (animSource != ANIM_PONG) {
+        wsServer.sendTXT(num, "{\"type\":\"error\",\"message\":\"pong mode not active\"}");
+        return;
+      }
+      uint8_t player = pongAddPlayer();
+      if (player == 0) {
+        wsServer.sendTXT(num, "{\"type\":\"error\",\"message\":\"game full\"}");
+        return;
+      }
+      if (num < WS_MAX_CLIENTS) {
+        wsPlayerSlot[num] = player;
+      }
+      Serial.printf("[WS] Assigned client %u -> player %u (total: %u)\n",
+                    num, player, pong.playerCount);
+      String assign = "{\"type\":\"assign\",\"player\":";
+      assign += player;
+      assign += "}";
+      wsServer.sendTXT(num, assign);
+      broadcastPongState();
+      break;
+    }
+    case WStype_DISCONNECTED: {
+      Serial.printf("[WS] Client %u disconnected\n", num);
+      if (num < WS_MAX_CLIENTS && wsPlayerSlot[num] != 0) {
+        pongRemovePlayer(wsPlayerSlot[num]);
+        wsPlayerSlot[num] = 0;
+        broadcastPongState();
+      }
+      break;
+    }
+    case WStype_TEXT: {
+      if (num >= WS_MAX_CLIENTS || wsPlayerSlot[num] == 0) {
+        Serial.printf("[WS] Ignoring text from client %u (slot=%u)\n", num,
+                      num < WS_MAX_CLIENTS ? wsPlayerSlot[num] : 0);
+        return;
+      }
+      String json = String((char*)payload);
+      char actionBuf[16];
+      if (parseJsonString(json, "action", actionBuf, sizeof(actionBuf))) {
+        Serial.printf("[WS] Player %u: %s\n", wsPlayerSlot[num], actionBuf);
+        handlePongInput(wsPlayerSlot[num], actionBuf);
+      }
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+void loopWebSocket() {
+  wsServer.loop();
 }
 
 // ── HTTP: upload animation (JSON) ───────────────────────────────────
@@ -142,7 +242,21 @@ static void handleStatus() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
 
   String json = "{\"source\":\"";
-  if (animSource == ANIM_STATIC) {
+  if (animSource == ANIM_PONG) {
+    json += "pong\",\"pong_status\":\"";
+    switch (pong.status) {
+      case PONG_WAITING:  json += "waiting";  break;
+      case PONG_PLAYING:  json += "playing";  break;
+      case PONG_SCORED:   json += "scored";   break;
+      case PONG_GAMEOVER: json += "gameover"; break;
+    }
+    json += "\",\"pong_score\":[";
+    json += pong.score1;
+    json += ",";
+    json += pong.score2;
+    json += "],\"pong_players\":";
+    json += pong.playerCount;
+  } else if (animSource == ANIM_STATIC) {
     json += "static\"";
   } else if (animSource == ANIM_VISUALIZER) {
     json += "visualizer\"";
@@ -301,6 +415,33 @@ static void handleStaticPost() {
   server.send(200, "application/json", "{\"status\":\"ok\"}");
 }
 
+// ── HTTP: toggle Pong mode ───────────────────────────────────────────
+
+static void handlePong() {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+
+  if (animSource == ANIM_PONG) {
+    for (uint8_t i = 0; i < WS_MAX_CLIENTS; i++) {
+      if (wsPlayerSlot[i] != 0) {
+        pongRemovePlayer(wsPlayerSlot[i]);
+        wsPlayerSlot[i] = 0;
+      }
+    }
+    animSource = ANIM_BUILTIN;
+    currentFrame = 0;
+    Serial.println("[WEB] Pong OFF");
+    server.send(200, "application/json",
+                "{\"status\":\"ok\",\"pong\":false}");
+  } else {
+    animSource = ANIM_PONG;
+    initPong();
+    currentFrame = 0;
+    Serial.println("[WEB] Pong ON — waiting for players on ws://port 81");
+    server.send(200, "application/json",
+                "{\"status\":\"ok\",\"pong\":true}");
+  }
+}
+
 // ── HTTP: test page ─────────────────────────────────────────────────
 
 static const char INDEX_HTML[] PROGMEM = R"rawliteral(
@@ -398,8 +539,8 @@ static void sendCorsOk() {
 void setupWebServer() {
   uint8_t mac[6];
   WiFi.macAddress(mac);
-  char ssid[16];
-  snprintf(ssid, sizeof(ssid), "ModArt-%02X%02X", mac[4], mac[5]);
+  char ssid[10] = "Resonance";
+  //snprintf(ssid, sizeof(ssid), "Resonance");
   WiFi.softAP(ssid);
   Serial.printf("AP: %s  IP: %s\n", ssid, WiFi.softAPIP().toString().c_str());
 
@@ -414,8 +555,14 @@ void setupWebServer() {
   server.on("/visualizer", HTTP_OPTIONS, sendCorsOk);
   server.on("/static", HTTP_POST, handleStaticPost);
   server.on("/static", HTTP_OPTIONS, sendCorsOk);
+  server.on("/pong", HTTP_POST, handlePong);
+  server.on("/pong", HTTP_OPTIONS, sendCorsOk);
 
   server.begin();
   Serial.println("HTTP server ready");
+
+  wsServer.begin();
+  wsServer.onEvent(onWebSocketEvent);
+  Serial.println("WebSocket server ready on port 81");
 }
 

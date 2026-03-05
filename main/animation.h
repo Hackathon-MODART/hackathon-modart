@@ -9,7 +9,7 @@
 #define WIDTH           32
 #define HEIGHT          16
 #define NUM_LEDS        (WIDTH * HEIGHT)
-#define BRIGHTNESS      100
+#define BRIGHTNESS      80
 #define LED_TYPE        WS2812B
 #define COLOR_ORDER     GRB
 #define PANEL_HEIGHT    8
@@ -39,7 +39,7 @@ extern const BuiltinAnim builtins[];
 extern const uint8_t     BUILTIN_COUNT;
 
 // Playback state
-enum AnimSource : uint8_t { ANIM_BUILTIN, ANIM_LITTLEFS, ANIM_VISUALIZER, ANIM_STATIC };
+enum AnimSource : uint8_t { ANIM_BUILTIN, ANIM_LITTLEFS, ANIM_VISUALIZER, ANIM_STATIC, ANIM_PONG };
 
 extern AnimSource    animSource;
 extern uint8_t       builtinIndex;      // default: logo_anim_v4

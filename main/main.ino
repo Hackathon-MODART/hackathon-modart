@@ -10,6 +10,7 @@
 #include "animation.h"
 #include "visualizer.h"
 #include "web_server.h"
+#include "pong.h"
 
 // ── Setup ───────────────────────────────────────────────────────────
 
@@ -17,22 +18,29 @@ void setup() {
   Serial.begin(115200);
   delay(500);
 
-  // Initialize LED matrix + filesystem + animation state.
   initAnimation();
-
-  // Build frequency-band lookup table for the spectrum analyser.
   initVisualizer();
-
-  // Start Wi-Fi access point and HTTP API.
+  initPong();
   setupWebServer();
 }
 
 // ── Loop (non-blocking) ────────────────────────────────────────────
 
+static unsigned long lastPongBroadcast = 0;
+
 void loop() {
   server.handleClient();
+  loopWebSocket();
 
-  if (animSource == ANIM_VISUALIZER) {
+  if (animSource == ANIM_PONG) {
+    updatePong();
+    renderPong();
+    // Broadcast state to Flutter clients at ~10 Hz
+    if (millis() - lastPongBroadcast >= 100) {
+      lastPongBroadcast = millis();
+      broadcastPongState();
+    }
+  } else if (animSource == ANIM_VISUALIZER) {
     runVisualizer();
   } else if (millis() - lastFrameTime >= activeFrameDelay) {
     lastFrameTime = millis();

@@ -45,6 +45,8 @@ static void serveBall() {
   pong.ballX = WIDTH / 2.0f;
   pong.ballY = HEIGHT / 2.0f;
 
+  pong.rallyHits = 0;
+
   // Alternate serve direction based on total score
   float dir = ((pong.score1 + pong.score2) % 2 == 0) ? 1.0f : -1.0f;
   pong.ballVX = dir * 0.25f;
@@ -188,9 +190,12 @@ void updatePong() {
     if (by >= pong.paddle1Y && by < pong.paddle1Y + PONG_PADDLE_HEIGHT) {
       pong.ballX = PONG_PADDLE_X1 + 1.0f;
       pong.ballVX = -pong.ballVX;
-      pong.ballVX *= 1.02f;
       float hitPos = (pong.ballY - pong.paddle1Y) / (float)PONG_PADDLE_HEIGHT;
       pong.ballVY = (hitPos - 0.5f) * 0.5f;
+      float accel = 1.0f + pong.rallyHits * 0.05f;
+      pong.ballVX *= accel;
+      pong.ballVY *= accel;
+      pong.rallyHits++;
     }
   }
 
@@ -199,9 +204,12 @@ void updatePong() {
     if (by >= pong.paddle2Y && by < pong.paddle2Y + PONG_PADDLE_HEIGHT) {
       pong.ballX = PONG_PADDLE_X2 - 1.0f;
       pong.ballVX = -pong.ballVX;
-      pong.ballVX *= 1.02f;
       float hitPos = (pong.ballY - pong.paddle2Y) / (float)PONG_PADDLE_HEIGHT;
       pong.ballVY = (hitPos - 0.5f) * 0.5f;
+      float accel = 1.0f + pong.rallyHits * 0.05f;
+      pong.ballVX *= accel;
+      pong.ballVY *= accel;
+      pong.rallyHits++;
     }
   }
 
@@ -284,7 +292,7 @@ void renderPong() {
   if (pong.status == PONG_GAMEOVER) {
     if ((millis() / 300) % 2 == 0) {
       CRGB winColor = (pong.winner == 1) ? colorP1 : colorP2;
-      uint8_t winX = (pong.winner == 1) ? (WIDTH / 2 - 5) : (WIDTH / 2 + 2);
+      uint8_t winX = (pong.winner == 1) ? (WIDTH / 2 - 5) : (WIDTH / 2 + 3);
       uint8_t winScore = (pong.winner == 1) ? pong.score1 : pong.score2;
       drawDigit(winX, HEIGHT - 6, winScore, winColor);
     }

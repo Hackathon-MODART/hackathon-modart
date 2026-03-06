@@ -34,6 +34,7 @@ struct PongState {
   unsigned long lastTick;
   unsigned long scoreTime;      // millis() when a goal was scored
   uint8_t playerCount;
+  uint8_t rallyHits;            // paddle touches since last serve (drives acceleration)
 };
 
 extern PongState pong;
